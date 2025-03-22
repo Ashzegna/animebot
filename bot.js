@@ -1,3 +1,6 @@
+// Обновленный файл bot.js с улучшенной функциональностью уведомлений
+// Внесите следующие изменения в ваш файл bot.js
+
 const { Telegraf, Markup } = require('telegraf');
 const { v4: uuidv4 } = require('uuid');
 const { botTexts } = require('./config');
@@ -28,7 +31,8 @@ const createBot = (token) => {
         customQuestion: null,
         customQuestionOptions: [],
         testsSent: [],
-        testsReceived: []
+        testsReceived: [],
+        unreadResults: [] // Новый массив для хранения непрочитанных результатов
       };
       saveUser(userId, user);
     }
@@ -75,12 +79,22 @@ const createBot = (token) => {
     if (user) {
       user.state = 'main_menu';
       saveUser(userId, user);
+      
+      // Проверяем наличие непрочитанных результатов
+      const hasUnreadResults = user.unreadResults && user.unreadResults.length > 0;
+      
+      const buttons = [
+        ['🧪 Пройти тест', '📤 Отправить тест другу']
+      ];
+      
+      if (hasUnreadResults) {
+        buttons.push([`🔔 Новые результаты (${user.unreadResults.length})`]);
+      }
+      
+      buttons.push(['ℹ️ О боте', '🎵 О песне "Неправильные правила"']);
+      
+      return ctx.reply('Что хочешь сделать?', Markup.keyboard(buttons).resize());
     }
-    
-    return ctx.reply('Что хочешь сделать?', Markup.keyboard([
-      ['🧪 Пройти тест', '📤 Отправить тест другу'],
-      ['ℹ️ О боте', '🎵 О песне "Неправильные правила"']
-    ]).resize());
   }
 
   // Начать тест
@@ -115,10 +129,10 @@ const createBot = (token) => {
         const options = test.customQuestionOptions;
         
         const buttons = options.map((option, index) => 
-          Markup.button.callback(option, `custom_answer_${index}`)
+          Markup.button.callback(`${index + 1}️⃣ ${option}`, `custom_answer_${index}`)
         );
         
-        await ctx.reply(`${customQuestion} ${user.currentQuestion + 1}/${questions.length + 1}`, 
+        await ctx.reply(`${customQuestion} ${questionIndex + 1}/${questions.length + 1}`, 
           Markup.inlineKeyboard(buttons, { columns: 1 })
         );
         
@@ -221,7 +235,7 @@ ${result.description}
 *Твоя строчка из песни:*
 ${result.songLine}
 
-🎵 [Послушать песню](${result.songUrl})
+🎧 [Послушать песню](${result.songUrl})
 `;
     
     await ctx.reply(resultMessage, { parse_mode: 'Markdown' });
@@ -236,24 +250,31 @@ ${result.songLine}
         test.receiverAnswers = [...user.answers];
         test.receiverResult = result;
         test.receiverCustomAnswer = user.customAnswer;
+        test.completedAt = new Date().toISOString();
         saveTest(test.id, test);
         
         // Предлагаем посмотреть результаты отправителя
         await ctx.reply(botTexts.surpriseMessage, 
           Markup.inlineKeyboard([
-            Markup.button.callback('Да, хочу увидеть!', 'view_sender_results')
+            Markup.button.callback('👀 Да, хочу увидеть!', 'view_sender_results')
           ])
         );
         
-        // Отправляем уведомление отправителю
+        // Отправляем уведомление отправителю с улучшенным форматированием
         try {
           const sender = getUser(test.sender);
           if (sender) {
+            // Добавляем тест в список непрочитанных результатов
+            if (!sender.unreadResults) sender.unreadResults = [];
+            sender.unreadResults.push(test.id);
+            saveUser(sender.id, sender);
+            
+            // Отправляем привлекательное уведомление
             bot.telegram.sendMessage(
               sender.id,
-              `${botTexts.friendCompletedTest}\n\nТвой друг ${ctx.from.first_name} прошел тест!`,
+              `🎉 РЕЗУЛЬТАТЫ ПРИШЛИ! 🎉\n\nТвой друг ${ctx.from.first_name} прошел тест! Теперь ты можешь узнать, какой он персонаж аниме и увидеть ответы на все вопросы, включая твой собственный!`,
               Markup.inlineKeyboard([
-                Markup.button.callback('Посмотреть результаты', `view_receiver_results_${test.id}`)
+                Markup.button.callback('👀 Посмотреть результаты', `view_receiver_results_${test.id}`)
               ])
             );
           }
@@ -265,7 +286,7 @@ ${result.songLine}
       // Если это был обычный тест, предлагаем отправить тест другу
       await ctx.reply(botTexts.shareInvitation, 
         Markup.inlineKeyboard([
-          Markup.button.callback('Отправить тест другу', 'share_test')
+          Markup.button.callback('📱 Отправить тест другу', 'share_test')
         ])
       );
     }
@@ -301,7 +322,7 @@ ${senderResult.description}
 *Строчка из песни друга:*
 ${senderResult.songLine}
 
-🎵 [Послушать песню](${senderResult.songUrl})
+🎧 [Послушать песню](${senderResult.songUrl})
 `;
     
     await ctx.reply(resultMessage, { parse_mode: 'Markdown' });
@@ -314,14 +335,14 @@ ${botTexts.compatibilityIntro}
 
 ${compatibility.emojis}
 
-*Уровень совместимости:* ${compatibility.compatibilityLevel}/5 ⭐
+*Уровень совместимости:* ${'⭐'.repeat(compatibility.compatibilityLevel)}
 
 ${compatibility.compatibilityText}
 
 *Ваша общая строчка из песни:*
 ${compatibility.songLine}
 
-🎵 [Послушать песню](${compatibility.songUrl})
+🎧 [Послушать песню](${compatibility.songUrl})
 `;
     
     await ctx.reply(compatibilityMessage, { parse_mode: 'Markdown' });
@@ -329,7 +350,7 @@ ${compatibility.songLine}
     await ctx.answerCbQuery();
   });
 
-  // Просмотр результатов получателя
+  // Просмотр результатов получателя (улучшенная версия)
   bot.action(/view_receiver_results_(.+)/, async (ctx) => {
     const userId = ctx.from.id;
     const testId = ctx.match[1];
@@ -348,11 +369,18 @@ ${compatibility.songLine}
       return;
     }
     
+    // Удаляем тест из списка непрочитанных результатов
+    const user = getUser(userId);
+    if (user && user.unreadResults) {
+      user.unreadResults = user.unreadResults.filter(id => id !== testId);
+      saveUser(userId, user);
+    }
+    
     // Отправляем результаты получателя
     const receiverResult = test.receiverResult;
     
     const resultMessage = `
-Результаты твоего друга ${receiver.name}:
+📊 *Результаты твоего друга ${receiver.name}:*
 
 ${receiverResult.emoji} *${receiverResult.name}* ${receiverResult.emoji}
 
@@ -364,12 +392,27 @@ ${receiverResult.songLine}
     
     await ctx.reply(resultMessage, { parse_mode: 'Markdown' });
     
+    // Отображаем ответы на стандартные вопросы (новый блок)
+    let responsesMessage = "*Ответы на вопросы:*\n\n";
+    for (let i = 0; i < Math.min(test.receiverAnswers.length, questions.length); i++) {
+      const question = questions[i];
+      const answer = test.receiverAnswers[i];
+      if (question && answer) {
+        responsesMessage += `*Вопрос ${i+1}:* ${question.text}\n`;
+        responsesMessage += `*Ответ:* ${answer.text}\n\n`;
+      }
+    }
+    
+    await ctx.reply(responsesMessage, { parse_mode: 'Markdown' });
+    
     // Если был пользовательский вопрос, показываем ответ на него
     if (test.customQuestion && test.receiverCustomAnswer) {
       await ctx.reply(`
-*Твой вопрос был:* "${test.customQuestion}"
+💡 *Твой персональный вопрос был:* 
+"${test.customQuestion}"
 
-*Ответ друга:* "${test.receiverCustomAnswer}"
+✨ *Ответ друга:* 
+"${test.receiverCustomAnswer}"
 `, { parse_mode: 'Markdown' });
     }
     
@@ -383,14 +426,14 @@ ${botTexts.compatibilityIntro}
 
 ${compatibility.emojis}
 
-*Уровень совместимости:* ${compatibility.compatibilityLevel}/5 ⭐
+*Уровень совместимости:* ${'⭐'.repeat(compatibility.compatibilityLevel)}
 
 ${compatibility.compatibilityText}
 
 *Ваша общая строчка из песни:*
 ${compatibility.songLine}
 
-🎵 [Послушать песню](${compatibility.songUrl})
+🎧 [Послушать песню](${compatibility.songUrl})
 `;
       
       await ctx.reply(compatibilityMessage, { parse_mode: 'Markdown' });
@@ -420,10 +463,10 @@ ${compatibility.songLine}
     const randomTemplate = customQuestionTemplates[Math.floor(Math.random() * customQuestionTemplates.length)];
     
     const buttons = randomTemplate.options.map((option, index) => 
-      Markup.button.callback(option, `select_custom_question_${index}`)
+      Markup.button.callback(`${index + 1}️⃣ ${option}`, `select_custom_question_${index}`)
     );
     
-    buttons.push(Markup.button.callback('Написать свой вопрос', 'write_custom_question'));
+    buttons.push(Markup.button.callback('✏️ Написать свой вопрос', 'write_custom_question'));
     
     await ctx.reply(`Предлагаю такой вопрос: "${randomTemplate.text}"`,
       Markup.inlineKeyboard(buttons, { columns: 1 })
@@ -495,8 +538,62 @@ ${compatibility.songLine}
           await ctx.reply('Сначала пройди тест, чтобы отправить его другу!');
           return;
         }
+        
+        // Запускаем процесс отправки теста
+        user.state = 'creating_custom_question';
+        saveUser(userId, user);
+        
         await ctx.reply(botTexts.customQuestionPrompt);
-        // Тут можно добавить логику с пользовательским вопросом
+        
+        // Выбираем случайный шаблон вопроса
+        const randomTemplate = customQuestionTemplates[Math.floor(Math.random() * customQuestionTemplates.length)];
+        
+        const buttons = randomTemplate.options.map((option, index) => 
+          Markup.button.callback(`${index + 1}️⃣ ${option}`, `select_custom_question_${index}`)
+        );
+        
+        buttons.push(Markup.button.callback('✏️ Написать свой вопрос', 'write_custom_question'));
+        
+        await ctx.reply(`Предлагаю такой вопрос: "${randomTemplate.text}"`,
+          Markup.inlineKeyboard(buttons, { columns: 1 })
+        );
+        
+        user.tempCustomQuestion = randomTemplate.text;
+        user.tempCustomQuestionOptions = [...randomTemplate.options];
+        saveUser(userId, user);
+        
+        return;
+      } else if (text.includes('Новые результаты')) {
+        // Показать список непрочитанных результатов
+        if (user.unreadResults && user.unreadResults.length > 0) {
+          await ctx.reply(`У тебя есть ${user.unreadResults.length} непрочитанных результатов! Вот они:`);
+          
+          const buttons = [];
+          for (const testId of user.unreadResults) {
+            const test = getTest(testId);
+            if (test && test.receiver) {
+              const receiver = getUser(test.receiver);
+              if (receiver) {
+                buttons.push([
+                  Markup.button.callback(
+                    `Результаты от ${receiver.name} (${new Date(test.completedAt).toLocaleDateString()})`, 
+                    `view_receiver_results_${testId}`
+                  )
+                ]);
+              }
+            }
+          }
+          
+          if (buttons.length > 0) {
+            await ctx.reply('Выбери результат для просмотра:', 
+              Markup.inlineKeyboard(buttons)
+            );
+          } else {
+            await ctx.reply('Произошла ошибка при загрузке результатов. Попробуй позже.');
+          }
+        } else {
+          await ctx.reply('У тебя нет непрочитанных результатов.');
+        }
         return;
       } else if (text === 'ℹ️ О боте') {
         await ctx.reply('Этот бот поможет тебе узнать, какой ты персонаж аниме в отношениях. Пройди тест и отправь его друзьям, чтобы узнать вашу совместимость!');
