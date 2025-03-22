@@ -1,0 +1,21 @@
+{
+  "name": "anime-personality-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for anime personality test based on song lyrics",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.12.2",
+    "uuid": "^9.0.0",
+    "node-cache": "^5.1.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
