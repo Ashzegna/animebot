@@ -2,20 +2,20 @@
 const { animePersonalityTypes, typeCompatibility } = require('./config');
 
 /**
- * Определяет тип аниме-персонажа на основе ответов пользователя
+ * Определяет тип личности/сверхспособность на основе ответов пользователя
  * @param {Array} answers - массив ответов пользователя
- * @returns {String} - ключ типа персонажа
+ * @returns {String} - ключ типа сверхспособности
  */
 function determinePersonalityType(answers) {
   // Подсчет очков для каждого типа
   const scores = {
-    tsundere: 0,
-    dandere: 0,
-    yandere: 0,
-    genki: 0,
-    kuudere: 0,
-    deredere: 0,
-    hime: 0
+    emotionalTelepatia: 0,
+    magneticAttraction: 0,
+    relationshipAlchemy: 0,
+    soulHealer: 0,
+    wisdomKeeper: 0,
+    specialMomentCreator: 0,
+    impossibilityMaster: 0
   };
   
   // Подсчет очков на основе ответов
@@ -27,7 +27,7 @@ function determinePersonalityType(answers) {
   
   // Находим тип с наибольшим количеством очков
   let maxScore = 0;
-  let resultType = 'genki'; // Значение по умолчанию
+  let resultType = 'relationshipAlchemy'; // Значение по умолчанию
   
   Object.keys(scores).forEach(type => {
     if (scores[type] > maxScore) {
@@ -41,11 +41,11 @@ function determinePersonalityType(answers) {
 
 /**
  * Генерирует полный результат для пользователя
- * @param {String} type - тип аниме-персонажа
+ * @param {String} type - тип сверхспособности
  * @returns {Object} - объект с полным описанием результата
  */
 function generateResult(type) {
-  const personalityType = animePersonalityTypes[type] || animePersonalityTypes.genki;
+  const personalityType = animePersonalityTypes[type] || animePersonalityTypes.relationshipAlchemy;
   
   return {
     type,
@@ -59,9 +59,9 @@ function generateResult(type) {
 }
 
 /**
- * Анализирует совместимость двух типов персонажей
- * @param {String} type1 - тип первого персонажа
- * @param {String} type2 - тип второго персонажа
+ * Анализирует совместимость двух типов сверхспособностей
+ * @param {String} type1 - тип первого пользователя
+ * @param {String} type2 - тип второго пользователя
  * @returns {Object} - объект с описанием совместимости
  */
 function analyzeCompatibility(type1, type2) {
@@ -74,27 +74,32 @@ function analyzeCompatibility(type1, type2) {
     compatibilityText = typeCompatibility[type2][type1];
   } else {
     // Общее описание, если специфичного нет
-    compatibilityText = 'Интересное сочетание! У вас разные характеры, которые могут дополнять друг друга.';
+    compatibilityText = 'Ваши сверхспособности дополняют друг друга, создавая уникальный баланс. Вместе вы можете видеть и чувствовать намного больше, чем по отдельности.';
   }
   
   // Определяем, насколько совместимы типы (от 1 до 5)
   let compatibilityLevel = 3; // По умолчанию средняя совместимость
   
-  // Некоторые правила совместимости (можно расширить)
-  if (type1 === type2) {
-    compatibilityLevel = 4; // Одинаковые типы обычно хорошо совместимы
-  } else if (
-    (type1 === 'tsundere' && type2 === 'deredere') || 
-    (type1 === 'deredere' && type2 === 'tsundere') ||
-    (type1 === 'dandere' && type2 === 'genki') || 
-    (type1 === 'genki' && type2 === 'dandere')
+  // Высокая совместимость для некоторых пар
+  if (
+    (type1 === 'emotionalTelepatia' && type2 === 'soulHealer') || 
+    (type1 === 'soulHealer' && type2 === 'emotionalTelepatia') ||
+    (type1 === 'magneticAttraction' && type2 === 'specialMomentCreator') || 
+    (type1 === 'specialMomentCreator' && type2 === 'magneticAttraction') ||
+    (type1 === 'relationshipAlchemy' && type2 === 'impossibilityMaster') || 
+    (type1 === 'impossibilityMaster' && type2 === 'relationshipAlchemy')
   ) {
-    compatibilityLevel = 5; // Отличная совместимость для некоторых пар
-  } else if (
-    (type1 === 'yandere' && type2 === 'yandere') || 
-    (type1 === 'kuudere' && type2 === 'kuudere')
+    compatibilityLevel = 5;
+  } 
+  // Хорошая совместимость для одинаковых типов
+  else if (type1 === type2) {
+    compatibilityLevel = 4;
+  }
+  // Средняя совместимость для комбинаций с wisdom
+  else if (
+    (type1 === 'wisdomKeeper' || type2 === 'wisdomKeeper')
   ) {
-    compatibilityLevel = 2; // Низкая совместимость для некоторых пар
+    compatibilityLevel = 3;
   }
   
   // Составляем общую строчку из песни для пары
