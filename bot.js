@@ -1,6 +1,4 @@
-// Обновленный файл bot.js с улучшенной функциональностью уведомлений
-// Внесите следующие изменения в ваш файл bot.js
-
+// Обновленный файл bot.js с исправлениями для меню и персональных вопросов
 const { Telegraf, Markup } = require('telegraf');
 const { v4: uuidv4 } = require('uuid');
 const { botTexts } = require('./config');
@@ -84,14 +82,14 @@ const createBot = (token) => {
       const hasUnreadResults = user.unreadResults && user.unreadResults.length > 0;
       
       const buttons = [
-        ['🧪 Пройти тест', '📤 Отправить тест другу']
+        ['✏️ Пройти тест', '📨 Отправить тест другу']
       ];
       
       if (hasUnreadResults) {
         buttons.push([`🔔 Новые результаты (${user.unreadResults.length})`]);
       }
       
-      buttons.push(['ℹ️ О боте', '🎵 О песне "Неправильные правила"']);
+      buttons.push(['ℹ️ О боте', '🎵 О песне "Паззлы"']);
       
       return ctx.reply('Что хочешь сделать?', Markup.keyboard(buttons).resize());
     }
@@ -272,7 +270,7 @@ ${result.songLine}
             // Отправляем привлекательное уведомление
             bot.telegram.sendMessage(
               sender.id,
-              `🎉 РЕЗУЛЬТАТЫ ПРИШЛИ! 🎉\n\nТвой друг ${ctx.from.first_name} прошел тест! Теперь ты можешь узнать, какой он персонаж аниме и увидеть ответы на все вопросы, включая твой собственный!`,
+              `🎉 РЕЗУЛЬТАТЫ ПРИШЛИ! 🎉\n\nТвой друг ${ctx.from.first_name} прошел тест! Теперь ты можешь узнать, какая у него сверхспособность и увидеть ответы на все вопросы, включая твой собственный!`,
               Markup.inlineKeyboard([
                 Markup.button.callback('👀 Посмотреть результаты', `view_receiver_results_${test.id}`)
               ])
@@ -286,7 +284,7 @@ ${result.songLine}
       // Если это был обычный тест, предлагаем отправить тест другу
       await ctx.reply(botTexts.shareInvitation, 
         Markup.inlineKeyboard([
-          Markup.button.callback('📱 Отправить тест другу', 'share_test')
+          Markup.button.callback('📨 Отправить тест другу', 'share_test')
         ])
       );
     }
@@ -442,7 +440,7 @@ ${compatibility.songLine}
     await ctx.answerCbQuery();
   });
 
-  // Отправка теста другу
+  // Отправка теста другу - ОБНОВЛЕНО
   bot.action('share_test', async (ctx) => {
     const userId = ctx.from.id;
     const user = getUser(userId);
@@ -451,163 +449,3 @@ ${compatibility.songLine}
       await ctx.reply('Сначала пройди тест, чтобы отправить его другу!');
       await ctx.answerCbQuery();
       return;
-    }
-    
-    user.state = 'creating_custom_question';
-    saveUser(userId, user);
-    
-    // Предлагаем добавить свой вопрос
-    await ctx.reply(botTexts.customQuestionPrompt);
-    
-    // Выбираем случайный шаблон вопроса из доступных
-    const randomTemplate = customQuestionTemplates[Math.floor(Math.random() * customQuestionTemplates.length)];
-    
-    const buttons = randomTemplate.options.map((option, index) => 
-      Markup.button.callback(`${index + 1}️⃣ ${option}`, `select_custom_question_${index}`)
-    );
-    
-    buttons.push(Markup.button.callback('✏️ Написать свой вопрос', 'write_custom_question'));
-    
-    await ctx.reply(`Предлагаю такой вопрос: "${randomTemplate.text}"`,
-      Markup.inlineKeyboard(buttons, { columns: 1 })
-    );
-    
-    user.tempCustomQuestion = randomTemplate.text;
-    user.tempCustomQuestionOptions = [...randomTemplate.options];
-    saveUser(userId, user);
-    
-    await ctx.answerCbQuery();
-  });
-
-  // Обработка выбора готового вопроса
-  bot.action(/select_custom_question_(\d+)/, async (ctx) => {
-    const userId = ctx.from.id;
-    const user = getUser(userId);
-    
-    if (!user || !user.tempCustomQuestion) return;
-    
-    const optionIndex = parseInt(ctx.match[1]);
-    if (optionIndex >= 0 && optionIndex < user.tempCustomQuestionOptions.length) {
-      // Генерируем ID для теста
-      const testId = uuidv4();
-      
-      // Создаем объект теста
-      const test = {
-        id: testId,
-        sender: userId,
-        receiver: null,
-        senderResult: user.results,
-        customQuestion: user.tempCustomQuestion,
-        customQuestionOptions: user.tempCustomQuestionOptions,
-        senderAnswers: user.answers,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      };
-      
-      saveTest(testId, test);
-      
-      // Обновляем данные пользователя
-      user.testsSent.push(testId);
-      user.state = 'test_sent';
-      saveUser(userId, user);
-      
-      // Формируем ссылку для отправки
-      const botUsername = ctx.botInfo.username;
-      const shareLink = `https://t.me/${botUsername}?start=${testId}`;
-      
-      await ctx.reply(`${botTexts.shareLinkMessage}\n\n${shareLink}`);
-    }
-    
-    await ctx.answerCbQuery();
-  });
-
-  // Обработка текстовых сообщений
-  bot.on('text', async (ctx) => {
-    const userId = ctx.from.id;
-    const user = getUser(userId);
-    const text = ctx.message.text;
-    
-    if (!user) return;
-    
-    // Обработка команд из главного меню
-    if (user.state === 'main_menu') {
-      if (text === '🧪 Пройти тест') {
-        return startTest(ctx);
-      } else if (text === '📤 Отправить тест другу') {
-        if (!user.results) {
-          await ctx.reply('Сначала пройди тест, чтобы отправить его другу!');
-          return;
-        }
-        
-        // Запускаем процесс отправки теста
-        user.state = 'creating_custom_question';
-        saveUser(userId, user);
-        
-        await ctx.reply(botTexts.customQuestionPrompt);
-        
-        // Выбираем случайный шаблон вопроса
-        const randomTemplate = customQuestionTemplates[Math.floor(Math.random() * customQuestionTemplates.length)];
-        
-        const buttons = randomTemplate.options.map((option, index) => 
-          Markup.button.callback(`${index + 1}️⃣ ${option}`, `select_custom_question_${index}`)
-        );
-        
-        buttons.push(Markup.button.callback('✏️ Написать свой вопрос', 'write_custom_question'));
-        
-        await ctx.reply(`Предлагаю такой вопрос: "${randomTemplate.text}"`,
-          Markup.inlineKeyboard(buttons, { columns: 1 })
-        );
-        
-        user.tempCustomQuestion = randomTemplate.text;
-        user.tempCustomQuestionOptions = [...randomTemplate.options];
-        saveUser(userId, user);
-        
-        return;
-      } else if (text.includes('Новые результаты')) {
-        // Показать список непрочитанных результатов
-        if (user.unreadResults && user.unreadResults.length > 0) {
-          await ctx.reply(`У тебя есть ${user.unreadResults.length} непрочитанных результатов! Вот они:`);
-          
-          const buttons = [];
-          for (const testId of user.unreadResults) {
-            const test = getTest(testId);
-            if (test && test.receiver) {
-              const receiver = getUser(test.receiver);
-              if (receiver) {
-                buttons.push([
-                  Markup.button.callback(
-                    `Результаты от ${receiver.name} (${new Date(test.completedAt).toLocaleDateString()})`, 
-                    `view_receiver_results_${testId}`
-                  )
-                ]);
-              }
-            }
-          }
-          
-          if (buttons.length > 0) {
-            await ctx.reply('Выбери результат для просмотра:', 
-              Markup.inlineKeyboard(buttons)
-            );
-          } else {
-            await ctx.reply('Произошла ошибка при загрузке результатов. Попробуй позже.');
-          }
-        } else {
-          await ctx.reply('У тебя нет непрочитанных результатов.');
-        }
-        return;
-      } else if (text === 'ℹ️ О боте') {
-        await ctx.reply('Этот бот поможет тебе узнать, какой ты персонаж аниме в отношениях. Пройди тест и отправь его друзьям, чтобы узнать вашу совместимость!');
-        return;
-      } else if (text === '🎵 О песне "Пазлы"') {
-        await ctx.reply('Песня "Пазлы" рассказывает об особенных отношениях, которые не вписываются в стандартные рамки. Послушать полную версию можно по ссылке: "https://music.yandex.ru/album/35714443/track/136874790"');
-        return;
-      }
-    }
-    
-    // Другие обработчики текста можно добавить здесь
-  });
-
-  return bot;
-};
-
-module.exports = { createBot };
