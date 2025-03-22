@@ -440,7 +440,7 @@ ${compatibility.songLine}
     await ctx.answerCbQuery();
   });
 
-  // Отправка теста другу - ОБНОВЛЕНО
+  // Отправка теста другу
   bot.action('share_test', async (ctx) => {
     const userId = ctx.from.id;
     const user = getUser(userId);
@@ -449,3 +449,134 @@ ${compatibility.songLine}
       await ctx.reply('Сначала пройди тест, чтобы отправить его другу!');
       await ctx.answerCbQuery();
       return;
+    }
+    
+    // Сразу создаем тест без лишних шагов с выбором вопроса
+    // Используем один из случайных шаблонов вопросов
+    const randomTemplate = customQuestionTemplates[Math.floor(Math.random() * customQuestionTemplates.length)];
+    
+    // Генерируем ID для теста
+    const testId = uuidv4();
+    
+    // Создаем объект теста
+    const test = {
+      id: testId,
+      sender: userId,
+      receiver: null,
+      senderResult: user.results,
+      customQuestion: randomTemplate.text,
+      customQuestionOptions: [...randomTemplate.options],
+      senderAnswers: user.answers,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    
+    saveTest(testId, test);
+    
+    // Обновляем данные пользователя
+    user.testsSent.push(testId);
+    user.state = 'test_sent';
+    saveUser(userId, user);
+    
+    // Формируем ссылку для отправки
+    const botUsername = ctx.botInfo.username;
+    const shareLink = `https://t.me/${botUsername}?start=${testId}`;
+    
+    await ctx.reply(`${botTexts.shareLinkMessage}\n\n${shareLink}`);
+    await ctx.answerCbQuery();
+  });
+
+  // Обработка текстовых сообщений
+  bot.on('text', async (ctx) => {
+    const userId = ctx.from.id;
+    const user = getUser(userId);
+    const text = ctx.message.text;
+    
+    if (!user) return;
+    
+    // Обработка команд из главного меню
+    if (user.state === 'main_menu') {
+      if (text === '✏️ Пройти тест') {
+        return startTest(ctx);
+      } else if (text === '📨 Отправить тест другу') {
+        if (!user.results) {
+          await ctx.reply('Сначала пройди тест, чтобы отправить его другу!');
+          return;
+        }
+        
+        // Та же логика, что и в обработчике 'share_test'
+        const randomTemplate = customQuestionTemplates[Math.floor(Math.random() * customQuestionTemplates.length)];
+        const testId = uuidv4();
+        
+        const test = {
+          id: testId,
+          sender: userId,
+          receiver: null,
+          senderResult: user.results,
+          customQuestion: randomTemplate.text,
+          customQuestionOptions: [...randomTemplate.options],
+          senderAnswers: user.answers,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        };
+        
+        saveTest(testId, test);
+        
+        user.testsSent.push(testId);
+        user.state = 'test_sent';
+        saveUser(userId, user);
+        
+        const botUsername = ctx.botInfo.username;
+        const shareLink = `https://t.me/${botUsername}?start=${testId}`;
+        
+        await ctx.reply(`${botTexts.shareLinkMessage}\n\n${shareLink}`);
+        
+        return;
+      } else if (text.includes('Новые результаты')) {
+        // Показать список непрочитанных результатов
+        if (user.unreadResults && user.unreadResults.length > 0) {
+          await ctx.reply(`У тебя есть ${user.unreadResults.length} непрочитанных результатов! Вот они:`);
+          
+          const buttons = [];
+          for (const testId of user.unreadResults) {
+            const test = getTest(testId);
+            if (test && test.receiver) {
+              const receiver = getUser(test.receiver);
+              if (receiver) {
+                buttons.push([
+                  Markup.button.callback(
+                    `Результаты от ${receiver.name} (${new Date(test.completedAt).toLocaleDateString()})`, 
+                    `view_receiver_results_${testId}`
+                  )
+                ]);
+              }
+            }
+          }
+          
+          if (buttons.length > 0) {
+            await ctx.reply('Выбери результат для просмотра:', 
+              Markup.inlineKeyboard(buttons)
+            );
+          } else {
+            await ctx.reply('Произошла ошибка при загрузке результатов. Попробуй позже.');
+          }
+        } else {
+          await ctx.reply('У тебя нет непрочитанных результатов.');
+        }
+        return;
+      } else if (text === 'ℹ️ О боте') {
+        await ctx.reply(botTexts.aboutBotText);
+        return;
+      } else if (text === '🎵 О песне "Паззлы"') {
+        await ctx.reply(botTexts.aboutSongText);
+        return;
+      }
+    }
+    
+    // Другие обработчики текста можно добавить здесь
+  });
+
+  return bot;
+};
+
+module.exports = { createBot };
